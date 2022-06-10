@@ -84,7 +84,7 @@ namespace metal_3_example {
         [depth_texture_descriptor release];
 
         auto depth_stencil_descriptor = [[MTLDepthStencilDescriptor alloc] init];
-        depth_stencil_descriptor.depthCompareFunction = MTLCompareFunctionGreater;
+        depth_stencil_descriptor.depthCompareFunction = MTLCompareFunctionAlways;
         depth_stencil_descriptor.depthWriteEnabled = true;
 
         _depth_stencil_state = [_device newDepthStencilStateWithDescriptor: depth_stencil_descriptor];
@@ -97,17 +97,24 @@ namespace metal_3_example {
     void Engine::create_pipeline() noexcept {
         NSError* error;
 
-        auto library = [_device newLibraryWithFile: @"shaders.metallib" error: &error];
+        auto mesh_library = [_device newLibraryWithFile: @"simplest.mesh.metallib" error: &error];
         metal_util::panic_if_failed(error, "MTLDevice::newLibraryWithFile");
 
-        auto mesh_function = [library newFunctionWithName: @"mesh_function"];
-        auto fragment_function = [library newFunctionWithName:@"fragment_function"];
+        auto frag_library = [_device newLibraryWithFile: @"simplest.frag.metallib" error: &error];
+        metal_util::panic_if_failed(error, "MTLDevice::newLibraryWithFile");
+
+        auto mesh_function = [mesh_library newFunctionWithName: @"main_"];
+        auto fragment_function = [frag_library newFunctionWithName:@"main_"];
 
         auto mesh_render_pipeline_descriptor = [[MTLMeshRenderPipelineDescriptor alloc] init];
         mesh_render_pipeline_descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
         mesh_render_pipeline_descriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
         mesh_render_pipeline_descriptor.meshFunction = mesh_function;
         mesh_render_pipeline_descriptor.fragmentFunction = fragment_function;
+        
+        mesh_render_pipeline_descriptor.maxTotalThreadgroupsPerMeshGrid = 1;
+        mesh_render_pipeline_descriptor.maxTotalThreadsPerMeshThreadgroup = 126;
+        mesh_render_pipeline_descriptor.maxTotalThreadsPerObjectThreadgroup = 8;
 
         _render_pipeline_state = [_device newRenderPipelineStateWithMeshDescriptor: mesh_render_pipeline_descriptor options: MTLPipelineOptionNone reflection: nullptr error: &error];
         metal_util::panic_if_failed(error, "MTLDevice::newRenderPipelineStateWithMeshDescriptor");
@@ -117,7 +124,8 @@ namespace metal_3_example {
         [fragment_function release];
         [mesh_function release];
 
-        [library release];
+        [mesh_library release];
+        [frag_library release];
     }
 
     void Engine::destroy_pipeline() noexcept {
@@ -125,16 +133,16 @@ namespace metal_3_example {
     }
 
     void Engine::create_mesh() noexcept {
-        Mesh mesh("dragon.obj");
+        //Mesh mesh("dragon.obj");
 
-        metal_util::upload_mesh(_device, mesh, _vertex_buffer, _meshlet_buffer, _meshlet_data_buffer);
-        _num_meshlets = mesh.get_meshlets().size();
+        //metal_util::upload_mesh(_device, mesh, _vertex_buffer, _meshlet_buffer, _meshlet_data_buffer);
+        //_num_meshlets = mesh.get_meshlets().size();
     }
 
     void Engine::destroy_mesh() noexcept {
-        [_meshlet_data_buffer release];
-        [_meshlet_buffer release];
-        [_vertex_buffer release];
+        //[_meshlet_data_buffer release];
+        //[_meshlet_buffer release];
+        //[_vertex_buffer release];
     }
 
     void Engine::render_frame() noexcept {
@@ -146,8 +154,9 @@ namespace metal_3_example {
             auto render_pass_depth_attachment_descriptor = [[MTLRenderPassDepthAttachmentDescriptor alloc] init];
             render_pass_depth_attachment_descriptor.clearDepth = 0.0;
             render_pass_depth_attachment_descriptor.loadAction = MTLLoadActionClear;
-            render_pass_depth_attachment_descriptor.storeAction = MTLStoreActionDontCare;
+            render_pass_depth_attachment_descriptor.storeAction = MTLStoreActionStore;
             render_pass_depth_attachment_descriptor.texture = _depth_texture;
+            //render_pass_depth_attachment_descriptor.depthCompareFunction = MTLCompareFunctionAlways;
 
             auto render_pass_descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
             render_pass_descriptor.colorAttachments[0].clearColor = MTLClearColorMake(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
@@ -165,12 +174,12 @@ namespace metal_3_example {
             [render_encoder setRenderPipelineState:_render_pipeline_state];
             [render_encoder setDepthStencilState: _depth_stencil_state];
 
-            [render_encoder setMeshBytes: &mvp length: sizeof(glm::mat4) atIndex: 0];
-            [render_encoder setMeshBuffer: _vertex_buffer offset: 0 atIndex: 1];
-            [render_encoder setMeshBuffer: _meshlet_buffer offset: 0 atIndex: 2];
-            [render_encoder setMeshBuffer: _meshlet_data_buffer offset: 0 atIndex: 3];
+            //[render_encoder setMeshBytes: &mvp length: sizeof(glm::mat4) atIndex: 0];
+            //[render_encoder setMeshBuffer: _vertex_buffer offset: 0 atIndex: 1];
+            //[render_encoder setMeshBuffer: _meshlet_buffer offset: 0 atIndex: 2];
+            //[render_encoder setMeshBuffer: _meshlet_data_buffer offset: 0 atIndex: 3];
 
-            [render_encoder drawMeshThreadgroups:MTLSizeMake(_num_meshlets + 31, 1, 1) threadsPerObjectThreadgroup:MTLSizeMake(1, 1, 1) threadsPerMeshThreadgroup:MTLSizeMake(32, 1, 1)];
+            [render_encoder drawMeshThreadgroups:MTLSizeMake(1, 1, 1) threadsPerObjectThreadgroup:MTLSizeMake(1, 1, 1) threadsPerMeshThreadgroup:MTLSizeMake(126, 1, 1)];
             [render_encoder endEncoding];
 
             [command_buffer presentDrawable:surface];
@@ -194,9 +203,9 @@ namespace metal_3_example {
         SDL_Event ev;
 
         while(running) {
-            SDL_ShowCursor(SDL_DISABLE);
-            SDL_SetWindowGrab(_window, SDL_TRUE);
-            SDL_SetRelativeMouseMode(SDL_TRUE);
+            //SDL_ShowCursor(SDL_DISABLE);
+            //SDL_SetWindowGrab(_window, SDL_TRUE);
+            //SDL_SetRelativeMouseMode(SDL_TRUE);
 
             while(SDL_PollEvent(&ev)) {
                 if(ev.type == SDL_QUIT) {
